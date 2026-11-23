@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#10b981">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>NutriScan IA — Coach Nutritionnel</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        sage: {
+                            50: '#f2fbf7',
+                            100: '#e1f6ec',
+                            200: '#c3ebd9',
+                            300: '#95dac0',
+                            400: '#5ec19f',
+                            500: '#38a382',
+                            600: '#278469',
+                            700: '#216955',
+                        },
+                        coral: {
+                            50: '#fff5f2',
+                            100: '#ffe8e0',
+                            400: '#ff8a65',
+                            500: '#ff6b4a',
+                            600: '#e64a2e',
+                        },
+                        cream: '#f8faf9',
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(24, 39, 75, 0.06)',
+                        'nav': '0 -4px 24px rgba(0, 0, 0, 0.06)',
+                        'fab': '0 8px 24px rgba(56, 163, 130, 0.4)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Styles natifs mobile-first et masquage des barres de défilement */
+        body {
+            background-color: #eef2f0;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
+        }
+        
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Animation de scan laser */
+        @keyframes scanLine {
+            0% { top: 8%; opacity: 0.2; }
+            50% { top: 88%; opacity: 1; }
+            100% { top: 8%; opacity: 0.2; }
+        }
+        .animate-scan {
+            animation: scanLine 2.2s ease-in-out infinite;
+        }
+
+        /* Transitions fluides de jauge SVG */
+        .circle-progress {
+            transition: stroke-dashoffset 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        /* Conteneur principal façon smartphone sur grand écran */
+        .app-shell {
+            max-width: 480px;
+            margin: 0 auto;
+            min-height: 100dvh;
+            background-color: #f8faf9;
+            position: relative;
+            box-shadow: 0 0 40px rgba(0,0,0,0.08);
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased selection:bg-sage-200">
+
+    <!-- Conteneur Principal Mobile -->
+    <div class="app-shell flex flex-col pb-24">
+
+        <!-- Notification Toast personnalisée (remplace alert) -->
+        <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-[420px] pointer-events-none flex flex-col gap-2"></div>
+
+        <!-- EN-TÊTE DE L'APPLICATION -->
+        <header class="sticky top-0 z-30 bg-cream/90 backdrop-blur-md px-5 pt-4 pb-3 border-b border-slate-200/60 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-sage-400 to-sage-600 flex items-center justify-center text-white shadow-sm">
+                    <i data-lucide="leaf" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="font-display font-bold text-lg leading-tight text-slate-900">NutriScan <span class="text-sage-600">IA</span></h1>
+                    <p id="header-date" class="text-xs text-slate-500 font-medium capitalize">Aujourd'hui</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <!-- Badge Streak / Série -->
+                <div class="flex items-center gap-1 bg-coral-50 text-coral-600 px-2.5 py-1 rounded-full text-xs font-bold border border-coral-100">
+                    <i data-lucide="flame" class="w-3.5 h-3.5 fill-coral-500"></i>
+                    <span id="streak-count">3 j</span>
+                </div>
+                <!-- Bouton Ajout Rapide -->
+                <button onclick="openAddModal('Déjeuner')" class="w-9 h-9 rounded-full bg-sage-100 text-sage-700 flex items-center justify-center active:scale-95 transition" title="Ajouter un aliment">
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- CONTENU PRINCIPAL DES VUES -->
+        <main class="flex-1 px-4 pt-4 space-y-5">
+
+            <!-- ========================================== -->
+            <!-- VUE 1 : TABLEAU DE BORD (ACCUEIL)          -->
+            <!-- ========================================== -->
+            <section id="view-home" class="space-y-5">
+                
+                <!-- Carte Résumé Calorique & Macros -->
+                <div class="bg-white rounded-3xl p-5 shadow-soft border border-slate-100">
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="font-display font-bold text-base text-slate-800">Bilan du jour</h2>
+                        <span id="calories-remaining-badge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-sage-50 text-sage-700">
+                            Reste 750 kcal
+                        </span>
+                    </div>
+
+                    <!-- Jauge Circulaire Centrale -->
+                    <div class="flex items-center justify-around py-2">
+                        <!-- Consommées -->
+                        <div class="text-center">
+                            <p id="cal-consumed" class="font-display font-bold text-lg text-slate-800">0</p>
+                            <p class="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Mangées</p>
+                        </div>
+
+                        <!-- Cercle SVG -->
+                        <div class="relative w-36 h-36 flex items-center justify-center">
+                            <svg class="w-full h-full" viewBox="0 0 120 120">
+                                <!-- Fond du cercle -->
+                                <circle cx="60" cy="60" r="50" fill="none" stroke="#e1f6ec" stroke-width="11" />
+                                <!-- Progression -->
+                                <circle id="cal-circle" class="circle-progress" cx="60" cy="60" r="50" fill="none" stroke="#38a382" stroke-width="11" stroke-linecap="round" stroke-dasharray="314.16" stroke-dashoffset="314.16" />
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                <span id="cal-center-value" class="font-display font-extrabold text-2xl text-slate-900 leading-none">2200</span>
+                                <span id="cal-center-label" class="text-[11px] font-medium text-slate-500 mt-1">kcal restantes</span>
+                            </div>
+                        </div>
+
+                        <!-- Objectif -->
+                        <div class="text-center">
+                            <p id="cal-goal" class="font-display font-bold text-lg text-slate-800">2200</p>
+                            <p class="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Objectif</p>
+                        </div>
+                    </div>
+
+                    <!-- Barres de Macronutriments -->
+                    <div class="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-100">
+                        <!-- Protéines -->
+                        <div class="space-y-1.5">
+                            <div class="flex justify-between items-baseline">
+                                <span class="text-xs font-semibold text-slate-600">Protéines</span>
+                                <span id="prot-pct" class="text-[10px] font-bold text-emerald-600">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div id="prot-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                            <p class="text-[11px] text-slate-500 font-medium"><span id="prot-val" class="text-slate-800 font-bold">0</span> / <span id="prot-goal">130</span>g</p>
+                        </div>
+
+                        <!-- Glucides -->
+                        <div class="space-y-1.5">
+                            <div class="flex justify-between items-baseline">
+                                <span class="text-xs font-semibold text-slate-600">Glucides</span>
+                                <span id="carb-pct" class="text-[10px] font-bold text-amber-600">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div id="carb-bar" class="h-full bg-amber-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                            <p class="text-[11px] text-slate-500 font-medium"><span id="carb-val" class="text-slate-800 font-bold">0</span> / <span id="carb-goal">240</span>g</p>
+                        </div>
+
+                        <!-- Lipides -->
+                        <div class="space-y-1.5">
+                            <div class="flex justify-between items-baseline">
+                                <span class="text-xs font-semibold text-slate-600">Lipides</span>
+                                <span id="fat-pct" class="text-[10px] font-bold text-coral-600">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div id="fat-bar" class="h-full bg-coral-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                            <p class="text-[11px] text-slate-500 font-medium"><span id="fat-val" class="text-slate-800 font-bold">0</span> / <span id="fat-goal">70</span>g</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Carte Hydratation Interactive -->
+                <div class="bg-white rounded-3xl p-5 shadow-soft border border-slate-100">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-full bg-sky-50 text-sky-500 flex items-center justify-center">
+                                <i data-lucide="droplets" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-display font-bold text-sm text-slate-800">Hydratation</h3>
+                                <p class="text-xs text-slate-500"><span id="water-liters" class="font-semibold text-sky-600">0.0 L</span> / 2.0 L (verres de 250 ml)</p>
+                            </div>
+                        </div>
+                        <span id="water-count-badge" class="text-xs font-bold text-sky-600 bg-sky-50 px-2.5 py-1 rounded-full">0 / 8</span>
+                    </div>
+                    
+                    <!-- 8 Verres cliquables -->
+                    <div id="water-glasses-grid" class="grid grid-cols-8 gap-1.5 pt-1">
+                        <!-- Généré dynamiquement en JS -->
+                    </div>
+                </div>
+
+                <!-- Bannière incitative Scanner IA -->
+                <div onclick="switchTab('scan')" class="bg-gradient-to-r from-sage-600 to-sage-500 rounded-3xl p-4 text-white shadow-soft flex items-center justify-between cursor-pointer active:scale-[0.99] transition">
+                    <div class="space-y-1 pr-2">
+                        <span class="inline-block text-[10px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full">Propulsé par Gemini IA</span>
+                        <h3 class="font-display font-bold text-base">Prenez votre plat en photo</h3>
+                        <p class="text-xs text-sage-100">Analyse instantanée des calories, portions et équilibre nutritionnel.</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-2xl bg-white text-sage-600 flex items-center justify-center shrink-0 shadow-md">
+                        <i data-lucide="camera" class="w-6 h-6"></i>
+                    </div>
+                </div>
+
+                <!-- Aperçu rapide des repas du jour -->
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between px-1">
+                        <h3 class="font-display font-bold text-base text-slate-800">Repas d'aujourd'hui</h3>
+                        <button onclick="switchTab('diary')" class="text-xs font-semibold text-sage-600 hover:underline">Voir tout le journal</button>
+                    </div>
+                    <div id="home-meals-list" class="space-y-3">
+                        <!-- Injecté par JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- VUE 2 : SCANNER DE REPAS PAR IA            -->
+            <!-- ========================================== -->
+            <section id="view-scan" class="hidden space-y-5">
+                <div class="text-center space-y-1">
+                    <h2 class="font-display font-bold text-xl text-slate-900">Scanner de Repas IA</h2>
+                    <p class="text-xs text-slate-500">Prenez une photo ou testez avec un plat exemple ci-dessous</p>
+                </div>
+
+                <!-- Zone de prévisualisation / Caméra -->
+                <div class="bg-white rounded-3xl p-4 shadow-soft border border-slate-100 space-y-4">
+                    <div id="scan-preview-box" class="relative w-full aspect-[4/3] rounded-2xl bg-slate-100 overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-sage-300">
+                        
+                        <!-- État vide initial -->
+                        <div id="scan-placeholder" class="text-center p-6 space-y-3">
+                            <div class="w-16 h-16 rounded-full bg-sage-100 text-sage-600 flex items-center justify-center mx-auto">
+                                <i data-lucide="scan-line" class="w-8 h-8"></i>
+                            </div>
+                            <div>
+                                <p class="font-semibold text-sm text-slate-700">Aucune photo sélectionnée</p>
+                                <p class="text-xs text-slate-400 mt-0.5">Utilisez l'appareil photo Android ou importez une image</p>
+                            </div>
+                        </div>
+
+                        <!-- Image sélectionnée -->
+                        <img id="scan-image-preview" src="" alt="Aperçu du repas" class="hidden w-full h-full object-cover" />
+
+                        <!-- Overlay d'animation pendant l'analyse IA -->
+                        <div id="scan-loading-overlay" class="hidden absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] flex flex-col items-center justify-center text-white p-4">
+                            <div class="absolute left-4 right-4 h-0.5 bg-sage-400 shadow-[0_0_12px_#5ec19f] animate-scan"></div>
+                            <div class="w-12 h-12 rounded-full border-4 border-sage-400 border-t-transparent animate-spin mb-3"></div>
+                            <p class="font-display font-bold text-base">Analyse nutritionnelle en cours...</p>
+                            <p class="text-xs text-sage-200 mt-1 text-center">Gemini identifie les ingrédients, estime les grammes et calcule les macros</p>
+                        </div>
+                    </div>
+
+                    <!-- Boutons d'action Caméra / Galerie -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="flex items-center justify-center gap-2 bg-sage-600 hover:bg-sage-700 text-white font-semibold text-sm py-3 px-4 rounded-2xl cursor-pointer shadow-sm active:scale-95 transition">
+                            <i data-lucide="camera" class="w-4 h-4"></i>
+                            <span>Prendre photo</span>
+                            <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden" onchange="handleImageUpload(event)">
+                        </label>
+                        
+                        <label class="flex items-center justify-center gap-2 bg-sage-50 hover:bg-sage-100 text-sage-700 font-semibold text-sm py-3 px-4 rounded-2xl cursor-pointer border border-sage-200 active:scale-95 transition">
+                            <i data-lucide="image" class="w-4 h-4"></i>
+                            <span>Galerie</span>
+                            <input type="file" id="gallery-input" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+                        </label>
+                    </div>
+
+                    <!-- Bouton Lancer l'analyse (visible quand une image est chargée) -->
+                    <button id="btn-run-ai-scan" onclick="analyzeCurrentImage()" class="hidden w-full py-3.5 rounded-2xl bg-gradient-to-r from-coral-500 to-coral-400 text-white font-display font-bold text-sm shadow-md flex items-center justify-center gap-2 active:scale-[0.98] transition">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                        <span>Analyser ce repas avec l'IA</span>
+                    </button>
+                </div>
+
+                <!-- Plats Exemples Cliquables (pour test instantané sans caméra) -->
+                <div class="space-y-2.5">
+                    <p class="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">Ou tester instantanément un exemple :</p>
+                    <div class="grid grid-cols-3 gap-2.5">
+                        <button onclick="loadSampleMeal('poke')" class="bg-white p-2 rounded-2xl border border-slate-100 shadow-soft text-left hover:border-sage-400 transition active:scale-95">
+                            <img src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80" crossorigin="anonymous" alt="Bol Poké Saumon" class="w-full h-16 object-cover rounded-xl mb-1.5" onerror="this.src='https://placehold.co/300x200/e1f6ec/278469?text=Poke+Bowl'">
+                            <p class="font-semibold text-[11px] text-slate-800 leading-tight line-clamp-2">Bol Poké Saumon</p>
+                        </button>
+
+                        <button onclick="loadSampleMeal('avocado')" class="bg-white p-2 rounded-2xl border border-slate-100 shadow-soft text-left hover:border-sage-400 transition active:scale-95">
+                            <img src="https://images.unsplash.com/photo-1525351484163-7529414342d8?auto=format&fit=crop&w=400&q=80" crossorigin="anonymous" alt="Avocat et Oeufs" class="w-full h-16 object-cover rounded-xl mb-1.5" onerror="this.src='https://placehold.co/300x200/e1f6ec/278469?text=Avocat+Oeufs'">
+                            <p class="font-semibold text-[11px] text-slate-800 leading-tight line-clamp-2">Avocat & Œufs</p>
+                        </button>
+
+                        <button onclick="loadSampleMeal('pasta')" class="bg-white p-2 rounded-2xl border border-slate-100 shadow-soft text-left hover:border-sage-400 transition active:scale-95">
+                            <img src="https://images.unsplash.com/photo-1612874742237-6526221588e3?auto=format&fit=crop&w=400&q=80" crossorigin="anonymous" alt="Pâtes Carbonara" class="w-full h-16 object-cover rounded-xl mb-1.5" onerror="this.src='https://placehold.co/300x200/e1f6ec/278469?text=Carbonara'">
+                            <p class="font-semibold text-[11px] text-slate-800 leading-tight line-clamp-2">Pâtes Carbonara</p>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- RÉSULTATS DE L'ANALYSE IA -->
+                <div id="scan-results-card" class="hidden bg-white rounded-3xl p-5 shadow-soft border border-sage-200 space-y-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-sage-600">Résultat de l'analyse</span>
+                            <h3 id="res-meal-title" class="font-display font-bold text-lg text-slate-900">Nom du plat</h3>
+                        </div>
+                        <!-- Note Nutritionnelle -->
+                        <div id="res-score-badge" class="flex flex-col items-center justify-center px-3 py-1.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 shrink-0">
+                            <span id="res-grade" class="font-display font-extrabold text-lg leading-none">A</span>
+                            <span id="res-score" class="text-[10px] font-semibold mt-0.5">88/100</span>
+                        </div>
+                    </div>
+
+                    <!-- Totaux du repas détecté -->
+                    <div class="grid grid-cols-4 gap-2 bg-slate-50 p-3 rounded-2xl text-center">
+                        <div>
+                            <p id="res-total-cal" class="font-display font-bold text-base text-slate-900">0</p>
+                            <p class="text-[10px] text-slate-500 font-medium">kcal</p>
+                        </div>
+                        <div>
+                            <p id="res-total-prot" class="font-display font-bold text-base text-emerald-600">0g</p>
+                            <p class="text-[10px] text-slate-500 font-medium">Protéines</p>
+                        </div>
+                        <div>
+                            <p id="res-total-carb" class="font-display font-bold text-base text-amber-600">0g</p>
+                            <p class="text-[10px] text-slate-500 font-medium">Glucides</p>
+                        </div>
+                        <div>
+                            <p id="res-total-fat" class="font-display font-bold text-base text-coral-600">0g</p>
+                            <p class="text-[10px] text-slate-500 font-medium">Lipides</p>
+                        </div>
+                    </div>
+
+                    <!-- Liste des aliments identifiés -->
+                    <div class="space-y-2">
+                        <p class="text-xs font-bold text-slate-700">Aliments détectés :</p>
+                        <div id="res-items-list" class="space-y-2">
+                            <!-- Injecté par JS -->
+                        </div>
+                    </div>
+
+                    <!-- Conseil personnalisé du coach IA -->
+                    <div class="bg-sage-50/80 border border-sage-200/70 rounded-2xl p-3.5 flex gap-3">
+                        <div class="w-8 h-8 rounded-full bg-sage-200/70 text-sage-700 flex items-center justify-center shrink-0 mt-0.5">
+                            <i data-lucide="heart-handshake" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold text-sage-800">Conseil du nutritionniste IA</p>
+                            <p id="res-advice" class="text-xs text-slate-600 mt-0.5 leading-relaxed">Conseil personnalisé...</p>
+                        </div>
+                    </div>
+
+                    <!-- Sélecteur du moment de repas + Bouton Valider -->
+                    <div class="pt-2 space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <label for="scan-meal-category" class="text-xs font-semibold text-slate-600">Ajouter dans :</label>
+                            <select id="scan-meal-category" class="bg-slate-100 border-0 rounded-xl text-xs font-bold text-slate-800 py-2 px-3 focus:ring-2 focus:ring-sage-500">
+                                <option value="Petit-déjeuner">Petit-déjeuner</option>
+                                <option value="Déjeuner" selected>Déjeuner</option>
+                                <option value="Dîner">Dîner</option>
+                                <option value="Collations">Collations</option>
+                            </select>
+                        </div>
+
+                        <button onclick="confirmScannedMeal()" class="w-full py-3.5 rounded-2xl bg-sage-600 hover:bg-sage-700 text-white font-display font-bold text-sm shadow-md flex items-center justify-center gap-2 active:scale-[0.98] transition">
+                            <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                            <span>Valider et ajouter au journal</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- VUE 3 : JOURNAL & RECHERCHE MANUELLE       -->
+            <!-- ========================================== -->
+            <section id="view-diary" class="hidden space-y-5">
+                
+                <!-- Barre de recherche & Ajout rapide -->
+                <div class="bg-white rounded-3xl p-4 shadow-soft border border-slate-100 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-display font-bold text-lg text-slate-900">Journal Alimentaire</h2>
+                        <button onclick="resetTodayDiary()" class="text-xs text-slate-400 hover:text-coral-500 font-medium">Réinitialiser le jour</button>
+                    </div>
+
+                    <div class="relative">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                        <input type="text" id="food-search-input" oninput="handleFoodSearch(this.value)" placeholder="Rechercher un aliment (ex: Pomme, Poulet, Croissant)..." class="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:border-sage-500 focus:bg-white transition">
+                    </div>
+
+                    <!-- Résultats de recherche instantanée + Bouton IA -->
+                    <div id="search-results-dropdown" class="hidden space-y-2 pt-1 max-h-64 overflow-y-auto no-scrollbar">
+                        <!-- Injecté par JS -->
+                    </div>
+                </div>
+
+                <!-- Les 4 moments de la journée -->
+                <div id="diary-sections-container" class="space-y-4">
+                    <!-- Injecté par JS : Petit-déjeuner, Déjeuner, Dîner, Collations -->
+                </div>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- VUE 4 : PROFIL & OBJECTIFS                 -->
+            <!-- ========================================== -->
+            <section id="view-profile" class="hidden space-y-5">
+                <div class="bg-white rounded-3xl p-5 shadow-soft border border-slate-100 space-y-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-sage-500 to-emerald-600 text-white flex items-center justify-center font-display font-bold text-xl shadow-sm">
+                            <i data-lucide="user" class="w-7 h-7"></i>
+                        </div>
+                        <div>
+                            <h2 class="font-display font-bold text-lg text-slate-900">Mon Profil & Objectifs</h2>
+                            <p class="text-xs text-slate-500">Calcul automatique de vos besoins quotidiens</p>
+                        </div>
+                    </div>
+
+                    <form id="profile-form" onsubmit="saveUserProfile(event)" class="space-y-4 pt-2">
+                        <!-- Objectif principal -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1.5">Votre objectif</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="goal" value="loss" class="peer hidden">
+                                    <div class="text-center py-2.5 px-2 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 peer-checked:bg-sage-600 peer-checked:text-white peer-checked:border-sage-600 transition">
+                                        Perte de poids
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="goal" value="maintain" class="peer hidden" checked>
+                                    <div class="text-center py-2.5 px-2 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 peer-checked:bg-sage-600 peer-checked:text-white peer-checked:border-sage-600 transition">
+                                        Maintien
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="goal" value="gain" class="peer hidden">
+                                    <div class="text-center py-2.5 px-2 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 peer-checked:bg-sage-600 peer-checked:text-white peer-checked:border-sage-600 transition">
+                                        Prise de muscle
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Sexe -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1.5">Sexe biologique</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="gender" value="female" class="peer hidden" checked>
+                                    <div class="text-center py-2 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 peer-checked:bg-sage-100 peer-checked:text-sage-800 peer-checked:border-sage-500 transition">
+                                        Femme
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="gender" value="male" class="peer hidden">
+                                    <div class="text-center py-2 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-600 peer-checked:bg-sage-100 peer-checked:text-sage-800 peer-checked:border-sage-500 transition">
+                                        Homme
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Mensurations -->
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Poids (kg)</label>
+                                <input type="number" id="prof-weight" min="35" max="250" step="0.5" value="68" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:border-sage-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Taille (cm)</label>
+                                <input type="number" id="prof-height" min="120" max="230" value="170" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:border-sage-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1">Âge (ans)</label>
+                                <input type="number" id="prof-age" min="15" max="100" value="30" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:border-sage-500">
+                            </div>
+                        </div>
+
+                        <!-- Niveau d'activité -->
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">Niveau d'activité physique</label>
+                            <select id="prof-activity" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:border-sage-500">
+                                <option value="1.2">Sédentaire (peu ou pas d'exercice)</option>
+                                <option value="1.375" selected>Légèrement actif (1 à 3 séances/sem.)</option>
+                                <option value="1.55">Modérément actif (3 à 5 séances/sem.)</option>
+                                <option value="1.725">Très actif (6 à 7 séances/sem.)</option>
+                            </select>
+                        </div>
+
+                        <!-- Résumé des besoins calculés -->
+                        <div class="bg-sage-50 rounded-2xl p-3.5 border border-sage-200/70 flex items-center justify-between">
+                            <div>
+                                <p class="text-xs font-semibold text-sage-800">Objectif journalier calculé</p>
+                                <p class="text-[11px] text-sage-600 mt-0.5" id="prof-macros-preview">130g Prot • 240g Gluc • 70g Lip</p>
+                            </div>
+                            <p class="font-display font-extrabold text-xl text-sage-700"><span id="prof-cal-preview">2200</span> <span class="text-xs font-normal">kcal</span></p>
+                        </div>
+
+                        <button type="submit" class="w-full py-3.5 rounded-2xl bg-sage-600 hover:bg-sage-700 text-white font-display font-bold text-sm shadow-sm active:scale-[0.98] transition">
+                            Enregistrer mes objectifs
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Guide d'installation PWA sur Android Chrome -->
+                <div class="bg-white rounded-3xl p-5 shadow-soft border border-slate-100 space-y-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                            <i data-lucide="smartphone" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-display font-bold text-sm text-slate-900">Installer sur votre téléphone Android</h3>
+                            <p class="text-[11px] text-slate-500">Utilisez NutriScan IA comme une application native</p>
+                        </div>
+                    </div>
+                    <ol class="text-xs text-slate-600 space-y-2 pl-1">
+                        <li class="flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-full bg-sage-100 text-sage-700 font-bold text-[11px] flex items-center justify-center shrink-0">1</span>
+                            <span>Ouvrez cette page dans <strong>Google Chrome</strong> sur Android.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-full bg-sage-100 text-sage-700 font-bold text-[11px] flex items-center justify-center shrink-0">2</span>
+                            <span>Appuyez sur le menu <strong>⋮</strong> en haut à droite de votre navigateur.</span>
+                        </li>
+                        <li class="flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-full bg-sage-100 text-sage-700 font-bold text-[11px] flex items-center justify-center shrink-0">3</span>
+                            <span>Sélectionnez <strong>« Ajouter à l'écran d'accueil »</strong> ou <strong>« Installer l'application »</strong>.</span>
+                        </li>
+                    </ol>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- BARRE DE NAVIGATION INFÉRIEURE STYLE ANDROID -->
+        <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-nav px-4 py-2 z-40">
+            <div class="grid grid-cols-5 items-center">
+                <!-- Onglet Accueil -->
+                <button onclick="switchTab('home')" id="nav-home" class="nav-btn flex flex-col items-center justify-center gap-1 py-1 text-sage-600">
+                    <i data-lucide="home" class="w-5 h-5"></i>
+                    <span class="text-[10px] font-bold">Accueil</span>
+                </button>
+
+                <!-- Onglet Journal -->
+                <button onclick="switchTab('diary')" id="nav-diary" class="nav-btn flex flex-col items-center justify-center gap-1 py-1 text-slate-400 hover:text-slate-600">
+                    <i data-lucide="book-open" class="w-5 h-5"></i>
+                    <span class="text-[10px] font-semibold">Journal</span>
+                </button>
+
+                <!-- Bouton Central Proéminent : Scanner IA -->
+                <div class="flex justify-center -mt-7">
+                    <button onclick="switchTab('scan')" id="nav-scan" class="w-14 h-14 rounded-full bg-gradient-to-tr from-sage-600 to-sage-400 text-white shadow-fab flex items-center justify-center border-4 border-cream active:scale-95 transition" title="Scanner un repas">
+                        <i data-lucide="camera" class="w-6 h-6"></i>
+                    </button>
+                </div>
+
+                <!-- Onglet Recherche Rapide -->
+                <button onclick="openAddModal('Déjeuner')" class="nav-btn flex flex-col items-center justify-center gap-1 py-1 text-slate-400 hover:text-slate-600">
+                    <i data-lucide="search" class="w-5 h-5"></i>
+                    <span class="text-[10px] font-semibold">Aliments</span>
+                </button>
+
+                <!-- Onglet Profil -->
+                <button onclick="switchTab('profile')" id="nav-profile" class="nav-btn flex flex-col items-center justify-center gap-1 py-1 text-slate-400 hover:text-slate-600">
+                    <i data-lucide="user" class="w-5 h-5"></i>
+                    <span class="text-[10px] font-semibold">Profil</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- ======================================================== -->
+        <!-- MODALE D'AJOUT MANUEL & AJUSTEMENT DES QUANTITÉS (GRAMMES) -->
+        <!-- ======================================================== -->
+        <div id="add-food-modal" class="hidden fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-end sm:items-center justify-center">
+            <div class="bg-white w-full max-w-[480px] rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl space-y-4 max-h-[90dvh] overflow-y-auto">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h3 class="font-display font-bold text-base text-slate-900">Ajouter un aliment</h3>
+                    <button onclick="closeAddModal()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <!-- Recherche dans la modale -->
+                <div class="space-y-2">
+                    <div class="relative flex gap-2">
+                        <div class="relative flex-1">
+                            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                            <input type="text" id="modal-search-input" oninput="filterModalFoods(this.value)" placeholder="Ex: Banane, Riz basmati, Yaourt grec..." class="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-sage-500">
+                        </div>
+                        <button id="btn-ai-estimate-food" onclick="estimateFoodWithAI()" class="px-3 py-2.5 bg-sage-100 text-sage-700 hover:bg-sage-200 rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 transition" title="Estimer via Gemini IA">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                            <span>IA</span>
+                        </button>
+                    </div>
+                    <p id="ai-estimate-status" class="hidden text-xs text-sage-600 font-medium animate-pulse">Estimation nutritionnelle par Gemini IA en cours...</p>
+                </div>
+
+                <!-- Liste des aliments filtrés -->
+                <div id="modal-food-list" class="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                    <!-- Injecté par JS -->
+                </div>
+
+                <!-- Panneau de configuration de portion de l'aliment sélectionné -->
+                <div id="selected-food-config" class="hidden bg-sage-50/70 border border-sage-200 rounded-2xl p-4 space-y-3">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 id="sel-food-name" class="font-display font-bold text-sm text-slate-900">Aliment</h4>
+                            <p class="text-[11px] text-slate-500">Valeurs pour <span id="sel-food-grams-display" class="font-bold text-slate-700">100</span> g</p>
+                        </div>
+                        <span class="font-display font-extrabold text-base text-sage-700"><span id="sel-food-cal">0</span> kcal</span>
+                    </div>
+
+                    <!-- Curseur et input grammes -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="text-xs font-semibold text-slate-600">Quantité (grammes) :</label>
+                            <input type="number" id="sel-food-grams-input" min="5" max="1500" value="100" oninput="updateSelectedFoodMacros(this.value)" class="w-24 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-right font-bold text-sm text-slate-800">
+                        </div>
+                        <input type="range" id="sel-food-grams-range" min="10" max="500" step="5" value="100" oninput="updateSelectedFoodMacros(this.value)" class="w-full accent-sage-600">
+                    </div>
+
+                    <!-- Macros calculées -->
+                    <div class="grid grid-cols-3 gap-2 text-center bg-white p-2 rounded-xl text-xs">
+                        <div><span class="text-slate-400">Prot:</span> <strong id="sel-food-prot" class="text-emerald-600">0g</strong></div>
+                        <div><span class="text-slate-400">Gluc:</span> <strong id="sel-food-carb" class="text-amber-600">0g</strong></div>
+                        <div><span class="text-slate-400">Lip:</span> <strong id="sel-food-fat" class="text-coral-600">0g</strong></div>
+                    </div>
+
+                    <!-- Choix du repas -->
+                    <div class="flex items-center justify-between pt-1">
+                        <label class="text-xs font-semibold text-slate-600">Moment du repas :</label>
+                        <select id="modal-meal-category" class="bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 py-2 px-3">
+                            <option value="Petit-déjeuner">Petit-déjeuner</option>
+                            <option value="Déjeuner">Déjeuner</option>
+                            <option value="Dîner">Dîner</option>
+                            <option value="Collations">Collations</option>
+                        </select>
+                    </div>
+
+                    <button onclick="confirmManualFoodAdd()" class="w-full py-3 rounded-xl bg-sage-600 hover:bg-sage-700 text-white font-display font-bold text-sm shadow-sm active:scale-[0.98] transition">
+                        Ajouter au journal
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- LOGIQUE JAVASCRIPT & INTÉGRATION GEMINI API              -->
+    <!-- ======================================================== -->
+    <script>
+        // Clé API injectée automatiquement par l'environnement lors de l'exécution
+        const apiKey = "";
+        const GEMINI_MODEL = "gemini-3-flash-preview";
+
+        // Base de données intégrée d'aliments courants en français (valeurs pour 100g)
+        const FRENCH_FOOD_DB = [
+            { name: "Blanc de poulet grillé", cal: 165, prot: 31, carb: 0, fat: 3.6, defaultGrams: 150 },
+            { name: "Riz basmati cuit", cal: 130, prot: 2.7, carb: 28, fat: 0.3, defaultGrams: 180 },
+            { name: "Pavé de saumon cuit", cal: 208, prot: 20, carb: 0, fat: 13, defaultGrams: 140 },
+            { name: "Avocat frais", cal: 160, prot: 2, carb: 8.5, fat: 14.7, defaultGrams: 100 },
+            { name: "Œuf entier (brouillé ou au plat)", cal: 155, prot: 13, carb: 1.1, fat: 11, defaultGrams: 120 },
+            { name: "Pain complet au levain", cal: 247, prot: 9, carb: 45, fat: 2.5, defaultGrams: 80 },
+            { name: "Flocons d'avoine", cal: 379, prot: 13.2, carb: 67.7, fat: 6.5, defaultGrams: 60 },
+            { name: "Banane fraîche", cal: 89, prot: 1.1, carb: 22.8, fat: 0.3, defaultGrams: 120 },
+            { name: "Pomme Golden / Gala", cal: 52, prot: 0.3, carb: 13.8, fat: 0.2, defaultGrams: 150 },
+            { name: "Yaourt grec nature 0%", cal: 59, prot: 10.3, carb: 3.6, fat: 0.4, defaultGrams: 150 },
+            { name: "Fromage blanc 3% MG", cal: 75, prot: 7.5, carb: 4.2, fat: 3, defaultGrams: 150 },
+            { name: "Pâtes complètes cuites", cal: 124, prot: 5.3, carb: 26.5, fat: 0.5, defaultGrams: 200 },
+            { name: "Brocoli vapeur", cal: 35, prot: 2.4, carb: 7.2, fat: 0.4, defaultGrams: 150 },
+            { name: "Amandes naturelles", cal: 579, prot: 21.2, carb: 21.6, fat: 49.9, defaultGrams: 30 },
+            { name: "Croissant au beurre", cal: 406, prot: 8.2, carb: 45.8, fat: 21, defaultGrams: 60 },
+            { name: "Steak haché 5% MG", cal: 137, prot: 21, carb: 0, fat: 5, defaultGrams: 125 },
+            { name: "Quinoa cuit", cal: 120, prot: 4.4, carb: 21.3, fat: 1.9, defaultGrams: 160 },
+            { name: "Huile d'olive vierge", cal: 884, prot: 0, carb: 0, fat: 100, defaultGrams: 10 },
+            { name: "Chocolat noir 70%", cal: 598, prot: 7.8, carb: 45.9, fat: 42.6, defaultGrams: 20 },
+            { name: "Lentilles vertes cuites", cal: 116, prot: 9, carb: 20.1, fat: 0.4, defaultGrams: 180 }
+        ];
+
+        // Plats exemples pour test instantané du Scanner IA
+        const SAMPLE_MEALS = {
+            poke: {
+                url: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80",
+                category: "Déjeuner",
+                fallbackData: {
+                    mealName: "Bol Poké Saumon, Avocat & Edamame",
+                    grade: "A",
+                    score: 91,
+                    advice: "Excellent équilibre entre acides gras oméga-3 (saumon, avocat), protéines complètes et glucides complexes. Pensez à modérer la sauce soja salée.",
+                    items: [
+                        { name: "Saumon frais cru en dés", grams: 120, calories: 250, proteins: 24, carbs: 0, fats: 16 },
+                        { name: "Riz vinaigré à sushi", grams: 160, calories: 208, proteins: 4, carbs: 45, fats: 0.5 },
+                        { name: "Avocat tranché", grams: 70, calories: 112, proteins: 1.4, carbs: 6, fats: 10.3 },
+                        { name: "Fèves edamame & concombre", grams: 90, calories: 75, proteins: 6.5, carbs: 7, fats: 2.5 }
+                    ]
+                }
+            },
+            avocado: {
+                url: "https://images.unsplash.com/photo-1525351484163-7529414342d8?auto=format&fit=crop&w=800&q=80",
+                category: "Petit-déjeuner",
+                fallbackData: {
+                    mealName: "Tartine Avocat & Œufs Pochés sur Pain Complet",
+                    grade: "A",
+                    score: 89,
+                    advice: "Petit-déjeuner rassasiant et riche en fibres et protéines de haute qualité, idéal pour éviter les fringales de la matinée.",
+                    items: [
+                        { name: "Pain complet grillé", grams: 85, calories: 210, proteins: 7.6, carbs: 38, fats: 2.1 },
+                        { name: "Avocat écrasé", grams: 90, calories: 144, proteins: 1.8, carbs: 7.6, fats: 13.2 },
+                        { name: "2 Œufs pochés", grams: 110, calories: 158, proteins: 13.8, carbs: 1.1, fats: 10.8 }
+                    ]
+                }
+            },
+            pasta: {
+                url: "https://images.unsplash.com/photo-1612874742237-6526221588e3?auto=format&fit=crop&w=800&q=80",
+                category: "Dîner",
+                fallbackData: {
+                    mealName: "Spaghetti à la Carbonara & Parmesan",
+                    grade: "C",
+                    score: 58,
+                    advice: "Plat riche en énergie et graisses saturées. Accompagnez-le d'une grande salade verte pour apporter des fibres et faciliter la digestion.",
+                    items: [
+                        { name: "Pâtes spaghetti cuites", grams: 220, calories: 345, proteins: 12, carbs: 68, fats: 2 },
+                        { name: "Lardons / Guanciale sautés", grams: 65, calories: 240, proteins: 11, carbs: 0.5, fats: 21 },
+                        { name: "Sauce œuf & parmesan râpé", grams: 60, calories: 195, proteins: 13, carbs: 1.5, fats: 15 }
+                    ]
+                }
+            }
+        };
+
+        // État global de l'application (sauvegardé dans localStorage)
+        let appState = {
+            profile: {
+                goal: 'maintain',
+                gender: 'female',
+                weight: 68,
+                height: 170,
+                age: 30,
+                activity: 1.375,
+                caloriesGoal: 2050,
+                proteinsGoal: 128,
+                carbsGoal: 231,
+                fatsGoal: 68
+            },
+            waterGlasses: 3, // Nombre de verres de 250ml bus aujourd'hui
+            meals: {
+                "Petit-déjeuner": [
+                    { id: 101, name: "Flocons d'avoine", grams: 60, calories: 227, proteins: 8, carbs: 41, fats: 4 },
+                    { id: 102, name: "Banane fraîche", grams: 110, calories: 98, proteins: 1, carbs: 25, fats: 0.3 }
+                ],
+                "Déjeuner": [
+                    { id: 103, name: "Blanc de poulet grillé", grams: 150, calories: 248, proteins: 46.5, carbs: 0, fats: 5.4 },
+                    { id: 104, name: "Riz basmati cuit", grams: 170, calories: 221, proteins: 4.6, carbs: 47.6, fats: 0.5 },
+                    { id: 105, name: "Brocoli vapeur", grams: 150, calories: 53, proteins: 3.6, carbs: 10.8, fats: 0.6 }
+                ],
+                "Dîner": [],
+                "Collations": [
+                    { id: 106, name: "Amandes naturelles", grams: 20, calories: 116, proteins: 4.2, carbs: 4.3, fats: 10 }
+                ]
+            }
+        };
+
+        // Variables temporaires pour le scanner et la modale
+        let currentScanBase64 = null;
+        let currentScanMimeType = "image/jpeg";
+        let currentSampleKey = null;
+        let lastAiScanResult = null;
+        let selectedFoodItem = null;
+
+        // ==========================================
+        // INITIALISATION & PERSISTANCE LOCALSTORAGE
+        // ==========================================
+        window.onload = function() {
+            loadStateFromStorage();
+            updateHeaderDate();
+            syncProfileForm();
+            renderAll();
+            lucide.createIcons();
+        };
+
+        function loadStateFromStorage() {
+            try {
+                const saved = localStorage.getItem('nutriscan_ia_state_v1');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    appState = { ...appState, ...parsed };
+                }
+            } catch (e) {
+                console.warn("Impossible de lire localStorage:", e);
+            }
+        }
+
+        function saveStateToStorage() {
+            try {
+                localStorage.setItem('nutriscan_ia_state_v1', JSON.stringify(appState));
+            } catch (e) {
+                console.warn("Impossible de sauvegarder dans localStorage:", e);
+            }
+        }
+
+        function updateHeaderDate() {
+            const options = { weekday: 'long', day: 'numeric', month: 'long' };
+            const dateStr = new Date().toLocaleDateString('fr-FR', options);
+            document.getElementById('header-date').textContent = dateStr;
+        }
+
+        // ==========================================
+        // SYSTÈME DE NOTIFICATIONS TOAST
+        // ==========================================
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-coral-600 text-white' : 'bg-slate-900 text-white';
+            toast.className = `${bgClass} px-4 py-3 rounded-2xl shadow-lg text-xs font-semibold flex items-center justify-between gap-2 transition-all duration-300 transform translate-y-0 opacity-100`;
+            toast.innerHTML = `<span>${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // ==========================================
+        // NAVIGATION PAR ONGLETS
+        // ==========================================
+        function switchTab(tabName) {
+            const views = ['home', 'scan', 'diary', 'profile'];
+            views.forEach(v => {
+                const el = document.getElementById(`view-${v}`);
+                if (el) el.classList.toggle('hidden', v !== tabName);
+            });
+
+            // Mise à jour visuelle des boutons de navigation
+            ['home', 'diary', 'profile'].forEach(nav => {
+                const btn = document.getElementById(`nav-${nav}`);
+                if (!btn) return;
+                if (nav === tabName) {
+                    btn.classList.remove('text-slate-400');
+                    btn.classList.add('text-sage-600');
+                } else {
+                    btn.classList.remove('text-sage-600');
+                    btn.classList.add('text-slate-400');
+                }
+            });
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            lucide.createIcons();
+        }
+
+        // ==========================================
+        // RENDU GLOBAL DU TABLEAU DE BORD & JOURNAL
+        // ==========================================
+        function renderAll() {
+            calculateAndRenderDashboard();
+            renderWaterTracker();
+            renderHomeMealsSummary();
+            renderFullDiary();
+            lucide.createIcons();
+        }
+
+        function calculateAndRenderDashboard() {
+            let totalCal = 0, totalProt = 0, totalCarb = 0, totalFat = 0;
+
+            Object.values(appState.meals).forEach(items => {
+                items.forEach(item => {
+                    totalCal += Number(item.calories) || 0;
+                    totalProt += Number(item.proteins) || 0;
+                    totalCarb += Number(item.carbs) || 0;
+                    totalFat += Number(item.fats) || 0;
+                });
+            });
+
+            totalCal = Math.round(totalCal);
+            totalProt = Math.round(totalProt);
+            totalCarb = Math.round(totalCarb);
+            totalFat = Math.round(totalFat);
+
+            const goal = appState.profile.caloriesGoal;
+            const remaining = goal - totalCal;
+
+            document.getElementById('cal-consumed').textContent = totalCal;
+            document.getElementById('cal-goal').textContent = goal;
+
+            const badge = document.getElementById('calories-remaining-badge');
+            if (remaining >= 0) {
+                document.getElementById('cal-center-value').textContent = remaining;
+                document.getElementById('cal-center-label').textContent = "kcal restantes";
+                badge.textContent = `Reste ${remaining} kcal`;
+                badge.className = "text-xs font-semibold px-2.5 py-1 rounded-full bg-sage-50 text-sage-700";
+            } else {
+                document.getElementById('cal-center-value').textContent = `+${Math.abs(remaining)}`;
+                document.getElementById('cal-center-label').textContent = "kcal dépassées";
+                badge.textContent = `Excédent ${Math.abs(remaining)} kcal`;
+                badge.className = "text-xs font-semibold px-2.5 py-1 rounded-full bg-coral-50 text-coral-600";
+            }
+
+            // Jauge SVG (circonférence = 2 * PI * 50 = 314.16)
+            const circumference = 314.16;
+            const ratio = Math.min(totalCal / Math.max(goal, 1), 1);
+            const offset = circumference - (ratio * circumference);
+            const circleEl = document.getElementById('cal-circle');
+            circleEl.style.strokeDashoffset = offset;
+            circleEl.style.stroke = totalCal > goal ? '#ff6b4a' : '#38a382';
+
+            // Macros
+            updateMacroUI('prot', totalProt, appState.profile.proteinsGoal);
+            updateMacroUI('carb', totalCarb, appState.profile.carbsGoal);
+            updateMacroUI('fat', totalFat, appState.profile.fatsGoal);
+        }
+
+        function updateMacroUI(prefix, val, goal) {
+            const pct = Math.min(Math.round((val / Math.max(goal, 1)) * 100), 100);
+            document.getElementById(`${prefix}-val`).textContent = val;
+            document.getElementById(`${prefix}-goal`).textContent = goal;
+            document.getElementById(`${prefix}-pct`).textContent = `${pct}%`;
+            document.getElementById(`${prefix}-bar`).style.width = `${pct}%`;
+        }
+
+        // ==========================================
+        // SUIVI D'HYDRATATION INTERACTIF
+        // ==========================================
+        function renderWaterTracker() {
+            const grid = document.getElementById('water-glasses-grid');
+            grid.innerHTML = '';
+            const count = appState.waterGlasses;
+
+            for (let i = 1; i <= 8; i++) {
+                const filled = i <= count;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.onclick = () => toggleWaterGlass(i);
+                btn.className = `h-11 rounded-xl flex flex-col items-center justify-center transition active:scale-90 ${
+                    filled 
+                    ? 'bg-sky-500 text-white shadow-xs' 
+                    : 'bg-sky-50 text-sky-300 hover:bg-sky-100 border border-sky-100'
+                }`;
+                btn.innerHTML = `
+                    <i data-lucide="cup-soda" class="w-4 h-4"></i>
+                    <span class="text-[9px] font-bold mt-0.5">+</span>
+                `;
+                grid.appendChild(btn);
+            }
+
+            const liters = (count * 0.25).toFixed(2).replace('.00', '.0');
+            document.getElementById('water-liters').textContent = `${liters} L`;
+            document.getElementById('water-count-badge').textContent = `${count} / 8`;
+        }
+
+        function toggleWaterGlass(index) {
+            if (appState.waterGlasses === index) {
+                appState.waterGlasses = index - 1;
+            } else {
+                appState.waterGlasses = index;
+            }
+            saveStateToStorage();
+            renderWaterTracker();
+            lucide.createIcons();
+        }
+
+        // ==========================================
+        // JOURNAL ALIMENTAIRE (ACCUEIL & VUE JOURNAL)
+        // ==========================================
+        const MEAL_META = {
+            "Petit-déjeuner": { icon: "coffee", color: "text-amber-600 bg-amber-50" },
+            "Déjeuner": { icon: "utensils", color: "text-sage-600 bg-sage-50" },
+            "Dîner": { icon: "moon", color: "text-indigo-600 bg-indigo-50" },
+            "Collations": { icon: "apple", color: "text-coral-600 bg-coral-50" }
+        };
+
+        function renderHomeMealsSummary() {
+            const container = document.getElementById('home-meals-list');
+            container.innerHTML = '';
+
+            Object.keys(MEAL_META).forEach(category => {
+                const items = appState.meals[category] || [];
+                const totalCal = Math.round(items.reduce((acc, item) => acc + item.calories, 0));
+                const meta = MEAL_META[category];
+
+                const card = document.createElement('div');
+                card.className = "bg-white rounded-2xl p-3.5 shadow-soft border border-slate-100 flex items-center justify-between";
+                card.innerHTML = `
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-10 h-10 rounded-xl ${meta.color} flex items-center justify-center shrink-0">
+                            <i data-lucide="${meta.icon}" class="w-5 h-5"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="font-display font-bold text-sm text-slate-800">${category}</h4>
+                            <p class="text-xs text-slate-400 truncate">
+                                ${items.length > 0 ? items.map(i => i.name).join(', ') : 'Aucun aliment enregistré'}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2.5 shrink-0 pl-2">
+                        <span class="font-display font-bold text-sm text-slate-700">${totalCal} <span class="text-[10px] font-normal text-slate-400">kcal</span></span>
+                        <button onclick="openAddModal('${category}')" class="w-8 h-8 rounded-full bg-sage-50 hover:bg-sage-100 text-sage-600 flex items-center justify-center transition">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderFullDiary() {
+            const container = document.getElementById('diary-sections-container');
+            container.innerHTML = '';
+
+            Object.keys(MEAL_META).forEach(category => {
+                const items = appState.meals[category] || [];
+                const totalCal = Math.round(items.reduce((acc, item) => acc + item.calories, 0));
+                const meta = MEAL_META[category];
+
+                const section = document.createElement('div');
+                section.className = "bg-white rounded-3xl p-4 shadow-soft border border-slate-100 space-y-3";
+
+                let itemsHtml = '';
+                if (items.length === 0) {
+                    itemsHtml = `<p class="text-xs text-slate-400 italic py-2 text-center">Aucun aliment pour ce repas</p>`;
+                } else {
+                    itemsHtml = items.map(item => `
+                        <div class="flex items-center justify-between py-2 border-t border-slate-100 first:border-t-0">
+                            <div class="pr-2">
+                                <p class="text-xs font-bold text-slate-800">${item.name}</p>
+                                <p class="text-[11px] text-slate-400">${item.grams}g • P: ${Math.round(item.proteins)}g • G: ${Math.round(item.carbs)}g • L: ${Math.round(item.fats)}g</p>
+                            </div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <span class="text-xs font-bold text-slate-700">${Math.round(item.calories)} kcal</span>
+                                <button onclick="deleteFoodItem('${category}', ${item.id})" class="p-1.5 text-slate-300 hover:text-coral-500 transition" title="Supprimer">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                section.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-xl ${meta.color} flex items-center justify-center">
+                                <i data-lucide="${meta.icon}" class="w-4 h-4"></i>
+                            </div>
+                            <h3 class="font-display font-bold text-sm text-slate-900">${category}</h3>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-sage-700 bg-sage-50 px-2.5 py-1 rounded-full">${totalCal} kcal</span>
+                            <button onclick="openAddModal('${category}')" class="w-7 h-7 rounded-full bg-slate-100 hover:bg-sage-100 text-slate-600 hover:text-sage-700 flex items-center justify-center">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="divide-y divide-slate-100">
+                        ${itemsHtml}
+                    </div>
+                `;
+                container.appendChild(section);
+            });
+        }
+
+        function deleteFoodItem(category, id) {
+            appState.meals[category] = appState.meals[category].filter(item => item.id !== id);
+            saveStateToStorage();
+            renderAll();
+            showToast("Aliment supprimé du journal");
+        }
+
+        function resetTodayDiary() {
+            appState.meals = {
+                "Petit-déjeuner": [],
+                "Déjeuner": [],
+                "Dîner": [],
+                "Collations": []
+            };
+            appState.waterGlasses = 0;
+            saveStateToStorage();
+            renderAll();
+            showToast("Journal du jour réinitialisé");
+        }
+
+        // ==========================================
+        // SCANNER DE REPAS PAR IA (GEMINI MULTIMODAL)
+        // ==========================================
+        function handleImageUpload(event) {
+            const file = event.target.files?.[0];
+            if (!file) return;
+
+            currentSampleKey = null;
+            currentScanMimeType = file.type || "image/jpeg";
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const dataUrl = e.target.result;
+                // Redimensionner légèrement côté client pour accélérer l'appel API
+                compressImage(dataUrl, 800, (compressedDataUrl) => {
+                    currentScanBase64 = compressedDataUrl.split(',')[1];
+                    displayScanPreview(compressedDataUrl);
+                });
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function compressImage(dataUrl, maxWidth, callback) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                callback(canvas.toDataURL('image/jpeg', 0.85));
+            };
+            img.src = dataUrl;
+        }
+
+        async function loadSampleMeal(key) {
+            const sample = SAMPLE_MEALS[key];
+            if (!sample) return;
+
+            currentSampleKey = key;
+            currentScanBase64 = null;
+            document.getElementById('scan-meal-category').value = sample.category;
+            displayScanPreview(sample.url);
+
+            // Conversion de l'image d'exemple en base64 si possible pour une vraie analyse Gemini
+            try {
+                const response = await fetch(sample.url);
+                const blob = await response.blob();
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    currentScanBase64 = reader.result.split(',')[1];
+                    currentScanMimeType = blob.type || "image/jpeg";
+                    analyzeCurrentImage();
+                };
+                reader.readAsDataURL(blob);
+            } catch (err) {
+                // Si CORS bloque le fetch, on utilise directement l'analyse précalculée
+                analyzeCurrentImage();
+            }
+        }
+
+        function displayScanPreview(src) {
+            document.getElementById('scan-placeholder').classList.add('hidden');
+            const imgEl = document.getElementById('scan-image-preview');
+            imgEl.src = src;
+            imgEl.classList.remove('hidden');
+            document.getElementById('btn-run-ai-scan').classList.remove('hidden');
+            document.getElementById('scan-results-card').classList.add('hidden');
+        }
+
+        async function fetchGeminiWithRetry(url, payload, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return await response.json();
+                } catch (err) {
+                    if (i === retries - 1) throw err;
+                    await new Promise(res => setTimeout(res, Math.pow(2, i) * 1000));
+                }
+            }
+        }
+
+        async function analyzeCurrentImage() {
+            const loadingOverlay = document.getElementById('scan-loading-overlay');
+            const resultsCard = document.getElementById('scan-results-card');
+            
+            loadingOverlay.classList.remove('hidden');
+            resultsCard.classList.add('hidden');
+
+            try {
+                if (!currentScanBase64 && currentSampleKey) {
+                    // Simulation réaliste si l'image externe n'a pas pu être lue en base64
+                    await new Promise(r => setTimeout(r, 1200));
+                    renderScanResults(SAMPLE_MEALS[currentSampleKey].fallbackData);
+                    return;
+                }
+
+                const prompt = `Tu es un nutritionniste expert français semblable à l'application Foodvisor. Analyse cette photo de repas avec précision.
+Identifie chaque aliment visible sur l'assiette, estime sa portion en grammes, calcule ses calories (kcal) et ses macronutriments (protéines, glucides, lipides en grammes).
+Attribue une note nutritionnelle globale (grade: "A", "B", "C", "D" ou "E") et un score sur 100, ainsi qu'un conseil personnalisé bienveillant et pratique en français (2 phrases max).`;
+
+                const payload = {
+                    contents: [{
+                        role: "user",
+                        parts: [
+                            { text: prompt },
+                            {
+                                inlineData: {
+                                    mimeType: currentScanMimeType,
+                                    data: currentScanBase64
+                                }
+                            }
+                        ]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                mealName: { type: "STRING" },
+                                grade: { type: "STRING" },
+                                score: { type: "NUMBER" },
+                                advice: { type: "STRING" },
+                                items: {
+                                    type: "ARRAY",
+                                    items: {
+                                        type: "OBJECT",
+                                        properties: {
+                                            name: { type: "STRING" },
+                                            grams: { type: "NUMBER" },
+                                            calories: { type: "NUMBER" },
+                                            proteins: { type: "NUMBER" },
+                                            carbs: { type: "NUMBER" },
+                                            fats: { type: "NUMBER" }
+                                        },
+                                        required: ["name", "grams", "calories", "proteins", "carbs", "fats"]
+                                    }
+                                }
+                            },
+                            required: ["mealName", "grade", "score", "advice", "items"]
+                        }
+                    }
+                };
+
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+                const result = await fetchGeminiWithRetry(apiUrl, payload);
+                const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!jsonText) throw new Error("Réponse vide de Gemini");
+                const parsedData = JSON.parse(jsonText);
+                renderScanResults(parsedData);
+
+            } catch (error) {
+                console.error("Erreur lors de l'analyse IA:", error);
+                if (currentSampleKey && SAMPLE_MEALS[currentSampleKey]) {
+                    renderScanResults(SAMPLE_MEALS[currentSampleKey].fallbackData);
+                } else {
+                    showToast("Impossible d'analyser l'image pour le moment. Réessayez.", "error");
+                }
+            } finally {
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+
+        function renderScanResults(data) {
+            lastAiScanResult = data;
+            
+            document.getElementById('res-meal-title').textContent = data.mealName || "Repas analysé";
+            document.getElementById('res-grade').textContent = data.grade || "B";
+            document.getElementById('res-score').textContent = `${data.score || 75}/100`;
+            document.getElementById('res-advice').textContent = data.advice || "Bon repas équilibré.";
+
+            // Couleur du badge selon la note
+            const badge = document.getElementById('res-score-badge');
+            const g = (data.grade || "B").toUpperCase();
+            if (g === 'A') {
+                badge.className = "flex flex-col items-center justify-center px-3 py-1.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 shrink-0";
+            } else if (g === 'B') {
+                badge.className = "flex flex-col items-center justify-center px-3 py-1.5 rounded-2xl bg-sage-50 border border-sage-200 text-sage-700 shrink-0";
+            } else {
+                badge.className = "flex flex-col items-center justify-center px-3 py-1.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 shrink-0";
+            }
+
+            let totCal = 0, totProt = 0, totCarb = 0, totFat = 0;
+            const listEl = document.getElementById('res-items-list');
+            listEl.innerHTML = '';
+
+            (data.items || []).forEach(item => {
+                totCal += item.calories;
+                totProt += item.proteins;
+                totCarb += item.carbs;
+                totFat += item.fats;
+
+                const row = document.createElement('div');
+                row.className = "flex items-center justify-between bg-slate-50 px-3 py-2.5 rounded-xl";
+                row.innerHTML = `
+                    <div>
+                        <p class="text-xs font-bold text-slate-800">${item.name}</p>
+                        <p class="text-[11px] text-slate-500">Portion estimée : <strong>${Math.round(item.grams)}g</strong></p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs font-bold text-sage-700">${Math.round(item.calories)} kcal</p>
+                        <p class="text-[10px] text-slate-400">P:${Math.round(item.proteins)}g G:${Math.round(item.carbs)}g L:${Math.round(item.fats)}g</p>
+                    </div>
+                `;
+                listEl.appendChild(row);
+            });
+
+            document.getElementById('res-total-cal').textContent = Math.round(totCal);
+            document.getElementById('res-total-prot').textContent = `${Math.round(totProt)}g`;
+            document.getElementById('res-total-carb').textContent = `${Math.round(totCarb)}g`;
+            document.getElementById('res-total-fat').textContent = `${Math.round(totFat)}g`;
+
+            const card = document.getElementById('scan-results-card');
+            card.classList.remove('hidden');
+            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            lucide.createIcons();
+        }
+
+        function confirmScannedMeal() {
+            if (!lastAiScanResult || !lastAiScanResult.items) return;
+
+            const category = document.getElementById('scan-meal-category').value;
+            lastAiScanResult.items.forEach((item, idx) => {
+                appState.meals[category].push({
+                    id: Date.now() + idx,
+                    name: item.name,
+                    grams: Math.round(item.grams),
+                    calories: Math.round(item.calories),
+                    proteins: Number(item.proteins.toFixed(1)),
+                    carbs: Number(item.carbs.toFixed(1)),
+                    fats: Number(item.fats.toFixed(1))
+                });
+            });
+
+            saveStateToStorage();
+            renderAll();
+            showToast(`Repas ajouté dans « ${category} » !`);
+            switchTab('home');
+        }
+
+        // ==========================================
+        // RECHERCHE MANUELLE & ESTIMATION IA RAPIDE
+        // ==========================================
+        function handleFoodSearch(query) {
+            const dropdown = document.getElementById('search-results-dropdown');
+            const trimmed = query.trim().toLowerCase();
+
+            if (!trimmed) {
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            const matches = FRENCH_FOOD_DB.filter(f => f.name.toLowerCase().includes(trimmed));
+            dropdown.classList.remove('hidden');
+
+            let html = matches.map(food => `
+                <button onclick='selectFoodFromQuickSearch(${JSON.stringify(food).replace(/'/g, "&#39;")})' class="w-full text-left px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-sage-50 flex items-center justify-between transition">
+                    <div>
+                        <p class="text-xs font-bold text-slate-800">${food.name}</p>
+                        <p class="text-[10px] text-slate-400">Pour 100g : ${food.cal} kcal • P:${food.prot}g G:${food.carb}g L:${food.fat}g</p>
+                    </div>
+                    <span class="text-xs font-bold text-sage-600">+ Ajouter</span>
+                </button>
+            `).join('');
+
+            // Option d'estimation par IA si introuvable ou spécifique
+            html += `
+                <button onclick="openAddModalWithQuery('${query.replace(/'/g, "\\'")}')" class="w-full text-left px-3 py-2.5 rounded-xl bg-sage-50 border border-sage-200 text-sage-800 flex items-center justify-between">
+                    <span class="text-xs font-semibold flex items-center gap-1.5">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5 text-sage-600"></i>
+                        Estimer « ${query} » avec l'IA
+                    </span>
+                    <span class="text-xs font-bold">Lancer →</span>
+                </button>
+            `;
+
+            dropdown.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function selectFoodFromQuickSearch(food) {
+            document.getElementById('food-search-input').value = '';
+            document.getElementById('search-results-dropdown').classList.add('hidden');
+            openAddModal('Déjeuner');
+            selectFoodForPortion(food);
+        }
+
+        function openAddModalWithQuery(query) {
+            document.getElementById('food-search-input').value = '';
+            document.getElementById('search-results-dropdown').classList.add('hidden');
+            openAddModal('Déjeuner');
+            document.getElementById('modal-search-input').value = query;
+            estimateFoodWithAI();
+        }
+
+        function openAddModal(defaultCategory = 'Déjeuner') {
+            document.getElementById('add-food-modal').classList.remove('hidden');
+            document.getElementById('modal-meal-category').value = defaultCategory;
+            document.getElementById('modal-search-input').value = '';
+            document.getElementById('selected-food-config').classList.add('hidden');
+            filterModalFoods('');
+            lucide.createIcons();
+        }
+
+        function closeAddModal() {
+            document.getElementById('add-food-modal').classList.add('hidden');
+        }
+
+        function filterModalFoods(query) {
+            const listEl = document.getElementById('modal-food-list');
+            const trimmed = query.trim().toLowerCase();
+            const filtered = trimmed 
+                ? FRENCH_FOOD_DB.filter(f => f.name.toLowerCase().includes(trimmed))
+                : FRENCH_FOOD_DB.slice(0, 8);
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = `
+                    <div class="text-center py-4 space-y-2">
+                        <p class="text-xs text-slate-500">Aucun aliment trouvé dans la liste locale.</p>
+                        <button onclick="estimateFoodWithAI()" class="px-4 py-2 rounded-xl bg-sage-600 text-white text-xs font-bold inline-flex items-center gap-1.5">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                            Demander à l'IA Gemini
+                        </button>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            listEl.innerHTML = filtered.map(food => `
+                <button type="button" onclick='selectFoodForPortion(${JSON.stringify(food).replace(/'/g, "&#39;")})' class="w-full text-left px-3 py-2.5 rounded-xl hover:bg-sage-50 border border-transparent hover:border-sage-200 flex items-center justify-between transition">
+                    <div>
+                        <p class="text-xs font-bold text-slate-800">${food.name}</p>
+                        <p class="text-[10px] text-slate-400">100g = ${food.cal} kcal (P:${food.prot}g G:${food.carb}g L:${food.fat}g)</p>
+                    </div>
+                    <i data-lucide="chevron-right" class="w-4 h-4 text-slate-400"></i>
+                </button>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        async function estimateFoodWithAI() {
+            const query = document.getElementById('modal-search-input').value.trim();
+            if (!query) {
+                showToast("Saisissez le nom d'un aliment à estimer", "error");
+                return;
+            }
+
+            const statusEl = document.getElementById('ai-estimate-status');
+            statusEl.classList.remove('hidden');
+
+            try {
+                const payload = {
+                    contents: [{
+                        role: "user",
+                        parts: [{
+                            text: `Donne les valeurs nutritionnelles moyennes pour 100g de cet aliment en français : "${query}", ainsi qu'une portion habituelle en grammes (defaultGrams).`
+                        }]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                name: { type: "STRING" },
+                                cal: { type: "NUMBER" },
+                                prot: { type: "NUMBER" },
+                                carb: { type: "NUMBER" },
+                                fat: { type: "NUMBER" },
+                                defaultGrams: { type: "NUMBER" }
+                            },
+                            required: ["name", "cal", "prot", "carb", "fat", "defaultGrams"]
+                        }
+                    }
+                };
+
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+                const res = await fetchGeminiWithRetry(apiUrl, payload);
+                const text = res?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) throw new Error("Réponse invalide");
+
+                const estimatedFood = JSON.parse(text);
+                selectFoodForPortion(estimatedFood);
+                showToast(`Valeurs estimées pour « ${estimatedFood.name} »`);
+            } catch (err) {
+                console.error(err);
+                showToast("Erreur lors de l'estimation IA", "error");
+            } finally {
+                statusEl.classList.add('hidden');
+            }
+        }
+
+        function selectFoodForPortion(food) {
+            selectedFoodItem = food;
+            const grams = food.defaultGrams || 100;
+
+            document.getElementById('selected-food-config').classList.remove('hidden');
+            document.getElementById('sel-food-name').textContent = food.name;
+            document.getElementById('sel-food-grams-input').value = grams;
+            document.getElementById('sel-food-grams-range').value = Math.min(grams, 500);
+            updateSelectedFoodMacros(grams);
+        }
+
+        function updateSelectedFoodMacros(gramsVal) {
+            if (!selectedFoodItem) return;
+            const grams = Math.max(1, Number(gramsVal) || 100);
+            const ratio = grams / 100;
+
+            document.getElementById('sel-food-grams-display').textContent = grams;
+            document.getElementById('sel-food-grams-input').value = grams;
+            document.getElementById('sel-food-grams-range').value = Math.min(grams, 500);
+
+            document.getElementById('sel-food-cal').textContent = Math.round(selectedFoodItem.cal * ratio);
+            document.getElementById('sel-food-prot').textContent = `${(selectedFoodItem.prot * ratio).toFixed(1)}g`;
+            document.getElementById('sel-food-carb').textContent = `${(selectedFoodItem.carb * ratio).toFixed(1)}g`;
+            document.getElementById('sel-food-fat').textContent = `${(selectedFoodItem.fat * ratio).toFixed(1)}g`;
+        }
+
+        function confirmManualFoodAdd() {
+            if (!selectedFoodItem) return;
+            const grams = Math.max(1, Number(document.getElementById('sel-food-grams-input').value) || 100);
+            const ratio = grams / 100;
+            const category = document.getElementById('modal-meal-category').value;
+
+            appState.meals[category].push({
+                id: Date.now(),
+                name: selectedFoodItem.name,
+                grams: grams,
+                calories: Math.round(selectedFoodItem.cal * ratio),
+                proteins: Number((selectedFoodItem.prot * ratio).toFixed(1)),
+                carbs: Number((selectedFoodItem.carb * ratio).toFixed(1)),
+                fats: Number((selectedFoodItem.fat * ratio).toFixed(1))
+            });
+
+            saveStateToStorage();
+            renderAll();
+            closeAddModal();
+            showToast(`${selectedFoodItem.name} (${grams}g) ajouté !`);
+        }
+
+        // ==========================================
+        // PROFIL & CALCUL DES BESOINS (MIFFLIN-ST JEOR)
+        // ==========================================
+        function syncProfileForm() {
+            const p = appState.profile;
+            const goalRadio = document.querySelector(`input[name="goal"][value="${p.goal}"]`);
+            if (goalRadio) goalRadio.checked = true;
+
+            const genderRadio = document.querySelector(`input[name="gender"][value="${p.gender}"]`);
+            if (genderRadio) genderRadio.checked = true;
+
+            document.getElementById('prof-weight').value = p.weight;
+            document.getElementById('prof-height').value = p.height;
+            document.getElementById('prof-age').value = p.age;
+            document.getElementById('prof-activity').value = p.activity;
+
+            updateProfilePreview();
+        }
+
+        // Écouteurs en direct sur le formulaire de profil
+        document.getElementById('profile-form').addEventListener('input', updateProfilePreview);
+
+        function computeNutritionalNeeds() {
+            const goal = document.querySelector('input[name="goal"]:checked')?.value || 'maintain';
+            const gender = document.querySelector('input[name="gender"]:checked')?.value || 'female';
+            const weight = Number(document.getElementById('prof-weight').value) || 68;
+            const height = Number(document.getElementById('prof-height').value) || 170;
+            const age = Number(document.getElementById('prof-age').value) || 30;
+            const activity = Number(document.getElementById('prof-activity').value) || 1.375;
+
+            // Formule Mifflin-St Jeor
+            let bmr = (10 * weight) + (6.25 * height) - (5 * age) + (gender === 'male' ? 5 : -161);
+            let tdee = bmr * activity;
+
+            if (goal === 'loss') tdee -= 400;
+            if (goal === 'gain') tdee += 300;
+
+            const caloriesGoal = Math.max(1200, Math.round(tdee));
+            // Répartition équilibrée : 25% Protéines, 45% Glucides, 30% Lipides
+            const proteinsGoal = Math.round((caloriesGoal * 0.25) / 4);
+            const carbsGoal = Math.round((caloriesGoal * 0.45) / 4);
+            const fatsGoal = Math.round((caloriesGoal * 0.30) / 9);
+
+            return { goal, gender, weight, height, age, activity, caloriesGoal, proteinsGoal, carbsGoal, fatsGoal };
+        }
+
+        function updateProfilePreview() {
+            const calc = computeNutritionalNeeds();
+            document.getElementById('prof-cal-preview').textContent = calc.caloriesGoal;
+            document.getElementById('prof-macros-preview').textContent = `${calc.proteinsGoal}g Prot • ${calc.carbsGoal}g Gluc • ${calc.fatsGoal}g Lip`;
+        }
+
+        function saveUserProfile(event) {
+            event.preventDefault();
+            appState.profile = computeNutritionalNeeds();
+            saveStateToStorage();
+            renderAll();
+            showToast("Objectifs mis à jour avec succès !");
+            switchTab('home');
+        }
+    </script>
+</body>
+</html>
